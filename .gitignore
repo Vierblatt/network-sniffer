@@ -1,0 +1,15 @@
+# 中间编译产物
+*.syso
+
+# 日志
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+Thumbs.db
+Desktop.ini

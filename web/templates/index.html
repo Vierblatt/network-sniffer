@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网络嗅探器 - 协议分析工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: #f0f2f5; color: #333; }
+        .header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; padding: 16px 24px; }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .header p { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 16px; }
+        .toolbar { background: white; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .toolbar label { font-weight: 600; font-size: 14px; }
+        .toolbar select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; min-width: 280px; }
+        .btn { padding: 6px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #1a73e8; color: white; }
+        .btn-primary:hover:not(:disabled) { background: #1557b0; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover:not(:disabled) { background: #b02a37; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover:not(:disabled) { background: #5a6268; }
+        .main-content { display: flex; gap: 12px; }
+        .packet-panel { flex: 1; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+        .detail-panel { width: 380px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .panel-header { padding: 10px 14px; border-bottom: 1px solid #e9ecef; font-weight: 600; font-size: 14px; background: #f8f9fa; display: flex; justify-content: space-between; }
+        .table-wrap { overflow-x: auto; max-height: calc(100vh - 280px); overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f8f9fa; padding: 8px 10px; text-align: left; font-weight: 600; color: #555; border-bottom: 2px solid #e9ecef; white-space: nowrap; position: sticky; top: 0; }
+        td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; font-family: 'Consolas', monospace; font-size: 12px; }
+        tr:hover td { background: #f0f7ff; cursor: pointer; }
+        tr.selected td { background: #e3f0ff; }
+        .stats-bar { background: white; border-radius: 8px; padding: 10px 16px; margin-top: 12px; display: flex; gap: 20px; font-size: 13px; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .stat-item { display: flex; gap: 5px; }
+        .stat-value { font-weight: 700; color: #1a73e8; }
+        .stat-label { color: #888; }
+        .status-bar { background: white; border-radius: 8px; padding: 8px 16px; margin-top: 8px; font-size: 13px; color: #666; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .empty-state { padding: 40px; text-align: center; color: #999; }
+        .error-msg { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌐 网络嗅探器 - 协议分析工具</h1>
+        <p>计算机网络课程设计 · Go语言实现</p>
+    </div>
+    <div class="container">
+        <div class="toolbar">
+            <label>📡 接口:</label>
+            <select id="interfaceSelect"></select>
+            <button class="btn btn-secondary" onclick="refreshInterfaces()">🔄 刷新</button>
+            <button class="btn btn-primary" id="startBtn" onclick="startCapture()">▶ 开始捕获</button>
+            <button class="btn btn-danger" id="stopBtn" onclick="stopCapture()" style="display:none">⏹ 停止</button>
+            <button class="btn btn-secondary" onclick="clearData()">🗑 清空</button>
+            <span id="errorMsg" class="error-msg" style="display:none"></span>
+        </div>
+        <div class="main-content">
+            <div class="packet-panel">
+                <div class="panel-header">
+                    <span>📦 数据包列表</span>
+                    <span id="packetCount">0 个</span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:50px">#</th>
+                                <th style="width:80px">时间</th>
+                                <th style="width:120px">源IP</th>
+                                <th style="width:120px">目的IP</th>
+                                <th style="width:70px">协议</th>
+                                <th style="width:60px">源端口</th>
+                                <th style="width:60px">目的端口</th>
+                                <th style="width:50px">长度</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packetBody"></tbody>
+                    </table>
+                    <div class="empty-state" id="emptyState">加载接口列表中...</div>
+                </div>
+            </div>
+            <div class="detail-panel">
+                <div class="panel-header">
+                    <span>📋 数据包详情</span>
+                </div>
+                <div id="detailContent" style="padding:12px">
+                    <div style="padding:20px;text-align:center;color:#999">点击数据包查看详情</div>
+                </div>
+            </div>
+        </div>
+        <div class="stats-bar">
+            <div class="stat-item"><span class="stat-label">总计:</span><span class="stat-value" id="statTotal">0</span></div>
+            <div class="stat-item"><span class="stat-label">TCP:</span><span class="stat-value" id="statTCP">0</span></div>
+            <div class="stat-item"><span class="stat-label">UDP:</span><span class="stat-value" id="statUDP">0</span></div>
+            <div class="stat-item"><span class="stat-label">ICMP:</span><span class="stat-value" id="statICMP">0</span></div>
+            <div class="stat-item"><span class="stat-label">ARP:</span><span class="stat-value" id="statARP">0</span></div>
+            <div class="stat-item"><span class="stat-label">其他:</span><span class="stat-value" id="statOther">0</span></div>
+            <div class="stat-item"><span class="stat-label">速率:</span><span class="stat-value" id="statRate">0</span></div>
+            <div class="stat-item"><span class="stat-label">耗时:</span><span class="stat-value" id="statElapsed">0s</span></div>
+        </div>
+        <div class="status-bar" id="statusBar">就绪</div>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
